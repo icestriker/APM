@@ -12,35 +12,34 @@ APM::APM(QWidget *parent) :
     initPos.lon=120.898334;
     initPos.lat=31.405428;
 
+
     view = new QWebView(ui->mapWidget);
     mark_view=new QWebView(ui->mark_view_widget);
 
     //load map
     runPath = QCoreApplication::applicationDirPath();
     view->load(QUrl::fromLocalFile (runPath+"/html/main_map.html"));
-    mark_view->load (QUrl::fromLocalFile (runPath+"/html/mark_map.html"));
 
 
+
+    //页面加载完毕后调用js
     connect(mark_view,SIGNAL(loadFinished(bool)),this,SLOT(mark_map_init()));
     connect(view, SIGNAL(loadFinished(bool)), this, SLOT(main_map_init()));
-    connect(ui->listWidget,SIGNAL(currentRowChanged(int)),this,SLOT(setAnimation()));
+
+    connect(ui->tabwidget,SIGNAL(currentChanged(int)),this,SLOT(loadMarkMap(int)));
+    connect(ui->listWidget,SIGNAL(currentRowChanged(int)),this,SLOT(setAnimation(int)));
     connect(mark_view->page()->mainFrame (),SIGNAL(javaScriptWindowObjectCleared()),this,SLOT(addToJavascript2()));
     connect(view->page ()->mainFrame (),SIGNAL(javaScriptWindowObjectCleared()),this,SLOT(addToJavascript()));
-    connect(ui->locatepushButton,SIGNAL(clicked()),this,SLOT(mark_map_init()));
+
 
     view->settings()->setAttribute(QWebSettings::PluginsEnabled, true);
     view->settings()->setAttribute(QWebSettings::JavascriptEnabled, true);
     view->settings()->setAttribute(QWebSettings::DeveloperExtrasEnabled, true);
     view->settings()->setAttribute(QWebSettings::JavascriptCanOpenWindows, true);
     view->settings()->setAttribute(QWebSettings::JavaEnabled, true);
-    mark_view->settings()->setAttribute(QWebSettings::PluginsEnabled, true);
-    mark_view->settings()->setAttribute(QWebSettings::JavascriptEnabled, true);
-    mark_view->settings()->setAttribute(QWebSettings::DeveloperExtrasEnabled, true);
-    mark_view->settings()->setAttribute(QWebSettings::JavascriptCanOpenWindows, true);
-    mark_view->settings()->setAttribute(QWebSettings::JavaEnabled, true);
+
 
     view->show();
-    mark_view->show ();
     createStatusBars ();
     setupgraphy ();
 }
@@ -100,6 +99,21 @@ void APM::updateStatusBars(QString info)
     ui->statusLabel->setText (info);
 }
 
+void APM::loadMarkMap(int index)
+{
+    if(index==2)
+    {
+     mark_view->load (QUrl::fromLocalFile (runPath+"/html/mark_map.html"));
+     mark_view->settings()->setAttribute(QWebSettings::PluginsEnabled, true);
+     mark_view->settings()->setAttribute(QWebSettings::JavascriptEnabled, true);
+     mark_view->settings()->setAttribute(QWebSettings::DeveloperExtrasEnabled, true);
+     mark_view->settings()->setAttribute(QWebSettings::JavascriptCanOpenWindows, true);
+     mark_view->settings()->setAttribute(QWebSettings::JavaEnabled, true);
+     mark_view->show ();
+     disconnect(ui->tabwidget,SIGNAL(currentChanged(int)),this,SLOT(loadMarkMap(int)));
+    }
+}
+
 
 
 void APM::realtimeDataSlot(){
@@ -147,23 +161,19 @@ void APM::realtimeDataSlot(){
 
 }
 
+
 void APM::mark_map_init()
 {
     QWebFrame *mark_frame = mark_view->page()->mainFrame();
     QString initCmd=QString("init(%1,%2);").arg (initPos.lon).arg (initPos.lat);
-    QString markCmd = QString("markGPS(%1, %2);").arg(initPos.lon).arg(initPos.lat);
-    mark_frame->evaluateJavaScript(markCmd);
     mark_frame->evaluateJavaScript(initCmd);
 }
 
 void APM::main_map_init (){
     QWebFrame *main_frame = view->page()->mainFrame();
     QString initCmd=QString("init(%1,%2);").arg (initPos.lon).arg (initPos.lat);
-    QString markCmd = QString("markGPS(%1, %2);").arg(initPos.lon).arg(initPos.lat);
-    //QString markCmd2 = QString("markGPS(%1, %2);").arg(120.895772).arg(31.413162);
     main_frame->evaluateJavaScript(initCmd);
-    main_frame->evaluateJavaScript(markCmd);
-   // main_frame->evaluateJavaScript (markCmd2);
+
 }
 
 void APM::addToJavascript (){
@@ -177,27 +187,32 @@ void APM::addToJavascript2 (){
 void APM::addFromHtml (QString a,QString b){
     GPS newPoint={a.toFloat (),b.toFloat ()};
     APM::targetList.push_back(newPoint);
+
     //APM::tar.push_back (new QListWidgetItem(QIcon(runPath+"/icons/target.png"),a+','+b,ui->listWidget));
-    int index=targetList.size ();
+    int index=targetList.size ()-1;
     ui->listWidget->insertItem (index,new QListWidgetItem(QIcon(runPath+"/icons/target.png"),a+','+b,ui->listWidget));
     ui->listWidget->show ();
 }
 
 void APM::delFromHtml(int i)
 {
-    GPS zero={0.0,0.0};
-    targetList[i]=zero;
-
-    QListWidgetItem *item=ui->listWidget->takeItem (i-1);
+    QListWidgetItem *item=ui->listWidget->takeItem (i);
     ui->listWidget->removeItemWidget (item);
     delete item;
+
+    vector <GPS>::iterator index=targetList.begin();
+    while(i--)
+        index++;
+    targetList.erase(index);
+
+
 }
 
-void APM::setAnimation()
+void APM::setAnimation(int index)
 {
-    int row=ui->listWidget->currentRow ();
+    //int row=ui->listWidget->currentRow ();
     QWebFrame *mark_frame = mark_view->page()->mainFrame();
-    QString cmd = QString("setAnimation(%1);").arg(row);
+    QString cmd = QString("setAnimation(%1);").arg(index);
     mark_frame->evaluateJavaScript(cmd);
     //cout<<ui->listWidget->currentRow ();
 }
@@ -213,18 +228,12 @@ void APM::getTarget()
     else
     for(unsigned int i=0;i<targetList.size ();i++){
         if(targetList[i].lon!=0.0 &&targetList[i].lat!=0.0){
-            QString markCmd = QString("markGPS(%1, %2);").arg(targetList[i].lon).arg(targetList[i].lat);
-            main_frame->evaluateJavaScript(markCmd);
+            QString Cmd = QString("markGPS(%1,%2);").arg(targetList[i].lon).arg(targetList[i].lat);
+            main_frame->evaluateJavaScript(Cmd);
         }
     }
 }
 
-void APM::updateLocation()
-{
-    QWebFrame *main_frame = view->page()->mainFrame();
-    QString cmd =QString("markGPS(%1,%2);").arg(initPos.lon).arg(initPos.lat);
-    main_frame->evaluateJavaScript(cmd);
-}
 
 
 void APM::route (float x, float y){
@@ -233,3 +242,43 @@ void APM::route (float x, float y){
     frame->evaluateJavaScript(cmd);
 }
 
+
+void APM::on_listWidget_customContextMenuRequested(const QPoint &pos)
+{
+    QListWidgetItem* curItem = ui->listWidget->itemAt( pos );
+        if( curItem == NULL )
+            return;
+
+    QMenu *popMenu = new QMenu( this );
+    QAction *deleteSeed = new QAction(tr("Delete"), this);
+
+    popMenu->addAction( deleteSeed );
+    connect( deleteSeed, SIGNAL(triggered() ), this, SLOT( deleteSeedSlot()) );
+
+    popMenu->exec( QCursor::pos() );
+        delete popMenu;
+        delete deleteSeed;
+
+}
+
+void APM::deleteSeedSlot(){
+    int ch = QMessageBox::warning(NULL, "Warning",
+                                     "Are you sure to delete seed ?",
+                                     QMessageBox::Yes | QMessageBox::No,
+                                     QMessageBox::No);
+
+       if ( ch != QMessageBox::Yes )
+           return;
+
+       QListWidgetItem * item = ui->listWidget->currentItem();
+       if( item == NULL )
+           return;
+       int curIndex = ui->listWidget->row(item);
+
+
+       QWebFrame *mark_frame = mark_view->page()->mainFrame();
+       QString cmd=QString("delFromQT(%1);").arg (curIndex);
+       mark_frame->evaluateJavaScript(cmd);
+
+
+}

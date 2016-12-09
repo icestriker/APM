@@ -39,6 +39,7 @@ public:
     void createStatusBars();
     void updateStatusBars(QString);
 
+
 public slots:
     void main_map_init();
     void mark_map_init();
@@ -46,10 +47,14 @@ public slots:
     void addToJavascript2 ();
     void addFromHtml(QString,QString);
     void delFromHtml(int);
-    void setAnimation();
+    void setAnimation(int);
     void getTarget();
-    void updateLocation();
     void realtimeDataSlot();
+    void loadMarkMap(int);
+    void deleteSeedSlot();
+
+private slots:
+    void on_listWidget_customContextMenuRequested(const QPoint &pos);
 
 private:
     Ui::APM *ui;
